@@ -1,6 +1,8 @@
 {
     "properties": {
         "version": {
+            "pattern": "/d\\.d$/",
+            "message": "version must respect the form [number].[number]",
             "required": true,
             "type": "number"
         },
@@ -28,7 +30,6 @@
         "related": {
             "required": true,
             "type": "array",
-            "minItems": 1,
             "maxItems": 3,
             "uniqueItems": true
         },

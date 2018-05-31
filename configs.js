@@ -32,6 +32,7 @@ function set_defaults() {
     var defaults = {
         exercise_dir: "exercises",
         exercise_prefix: "exercise",
+        exercise_template: "exercise_template.toml",
         exercise_schema: "exercise_schema.json"
     }
     for (const [key, value] of Object.entries(defaults)) {

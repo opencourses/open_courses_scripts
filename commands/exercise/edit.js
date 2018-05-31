@@ -1,9 +1,10 @@
 const chalk = require('chalk');
 var readline = require('readline');
-var configs = require('../../configs.js');
-var utils = require('../../utils.js');
-var toTOMLString = require('toml-stream').toTOMLString
+var configs = require('../../configs');
+var utils = require('../../utils');
+var exercise = require('./exercise');
 var prompt = require('prompt');
+var toTOMLString = require('toml-stream').toTOMLString
 
 exports.command = 'edit <number>'
 exports.desc = 'Edits the exercise content in an iterative way'
@@ -15,42 +16,75 @@ exports.handler = function (argv) {
         console.log("You should provide an exercise number");
         return;
     }
-    prompt.message = "new";
-    prompt.start();
-    var exercise_name = configs.parsed.exercise_prefix+'_'+utils.pad(argv.number);
-    var exercise_path = configs.parsed.exercise_dir+'/'+exercise_name+'/exercise.toml';
-    utils.parse_toml(exercise_path, function(err, data) {
-        if (err) {
-            console.error(chalk.red('Error while reading the exercise configuration file'));
-            return;
-        }
-        //var keys = Object.entries(data).filter((value, index) => !value[0].match('comment\d*'))
-                //.map((value, index) => value[0]);
-        //console.log(Object.entries(data));
-        edit_dict(Object.entries(data).entries(), continuation);
+    edit(argv.number, function(err) {
+        console.log(err? "Error during the edit process": "Modification ompleted");
     });
 }
 
-function continuation(err) {
-    console.log("finished");
+
+var schema;
+function edit(number, cb) {
+    prompt.message = "new";
+    prompt.start();
+    var exercise_path = exercise.get_exercise_path(exercise.get_exercise_name(number));
+    utils.parse_toml(exercise_path, function(err, data) {
+        if (err) {
+            console.error(chalk.red('Error while reading the exercise configuration file'));
+            return cb(err);
+        }
+        exercise.read_schema(configs.parsed.exercise_schema, function(err, readed_schema) {
+            if (err) {
+                console.log("Error reading schema");
+                return cb(err);
+            }
+            schema = readed_schema;
+
+            edit_dict(Object.entries(data).entries(), data, function(err) {
+                if (err) {
+                    return cb(err);
+                }
+                exercise.validate_data(data, function(err, result) {
+                    if (err) {
+                        return cb(err);
+                    }
+                    if (!result.valid) {
+                        console.log("The given data does not passes validation. Correct this errors:");
+                        console.log(result.errors);
+                        return cb(new Error("validation error"));
+                    } else {
+                        exercise.store(number, data, function(err) {
+                            return cb(err);
+                        });
+                    }
+                });
+            });
+        });
+    });
 }
 
-function edit_dict(iterator, callback) {
-    if (iterator.next().done) {
-        callback(null);
-    }
+function edit_dict(iterator, dict, callback) {
     var item = iterator.next().value;
+    if (!item) {
+        return callback(null);
+    }
     var key = item[1][0];
     var value = item[1][1];
     if (key.match('comment\d*')) {
-        return edit_dict(iterator);
+        return edit_dict(iterator, dict, callback);
     }
     console.log("current: "+ chalk.grey(key)+ ": " + value);
-    prompt.get(key, function(err, result) {
+    var item = {
+        properties: {}
+    };
+    item.properties[key] = schema["properties"][key];
+    item.properties[key].required = false;
+    prompt.get(item, function(err, result) {
         if (err) {
-            callback(err);
-            return;
+            return callback(err);
         }
-        return edit_dict(iterator);
+        if (result[key] != undefined && result[key] != '') {
+            dict[key] = result[key];
+        }
+        return edit_dict(iterator, dict, callback);
     });
 }
